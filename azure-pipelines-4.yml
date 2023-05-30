@@ -1,0 +1,57 @@
+trigger:
+- main
+
+
+pool:
+    vmImage: 'ubuntu-latest'
+
+variables:
+  IMAGE_REGISTRY_CONNECTION: 'ACR Test'
+  IMAGE_REGISTRY: 'TestACRe'
+  IMAGE_REPOSITORY: 'testacre.azurecr.io'
+  TAG: '$(Build.BuildId)'
+
+stages:
+- stage: TestApp
+  jobs: 
+  - job: TestApp
+    steps:
+    - task: Maven@4
+      inputs:
+        mavenPomFile: 'app/pom.xml'
+        goals: 'test'
+        publishJUnitResults: true
+        testResultsFiles: '**/surefire-reports/TEST-*.xml'
+        codeCoverageToolOption: 'JaCoCo'
+        javaHomeOption: 'JDKVersion'
+        mavenVersionOption: 'Default'
+        mavenAuthenticateFeed: false
+        effectivePomSkip: false
+        sonarQubeRunAnalysis: false
+    
+
+- stage: BuildApp
+  jobs: 
+  - job: BuildPushImage
+    steps:
+    - task: Docker@2
+      inputs:
+        containerRegistry: '$(IMAGE_REGISTRY_CONNECTION)'
+        repository: '$(IMAGE_REPOSITORY)'
+        command: 'buildAndPush'
+        Dockerfile: '**/Dockerfile'
+        tags: '$(TAG)'
+
+- stage: DeployDev
+  jobs: 
+  - job: DeployDev
+    steps:
+    - task: AzureRmWebAppDeployment@4
+      inputs:
+        ConnectionType: 'AzureRM'
+        azureSubscription: 'ARM test'
+        appType: 'webAppContainer'
+        WebAppName: 'gs-webappcont'
+        DockerNamespace: '$(IMAGE_REGISTRY)' 
+        DockerRepository: '$(IMAGE_REPOSITORY)'
+        DockerImageTag: '$(TAG)'
